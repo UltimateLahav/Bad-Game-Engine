@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nano 2D Game Engine & Editor</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0f172a; /* Dark slate */
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #e2e8f0;
+        }
+        
+        /* The main canvas where the game runs */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        /* --- UI OVERLAYS --- */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* Let clicks pass to canvas unless on a UI element */
+        }
+
+        /* Top Bar */
+        #top-bar {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            padding: 15px 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, rgba(15,23,42,0.9), transparent);
+            pointer-events: auto;
+        }
+        h1 { margin: 0; font-size: 22px; color: #38bdf8; text-transform: uppercase; letter-spacing: 2px; }
+
+        .btn-play {
+            background: #22c55e;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+        }
+        .btn-play:hover { background: #16a34a; transform: scale(1.05); }
+        .btn-stop { background: #ef4444; display: none; }
+        .btn-stop:hover { background: #dc2626; }
+
+        /* Toolbar (Sidebar) */
+        #toolbar {
+            position: absolute;
+            top: 80px; left: 20px;
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid #334155;
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: auto;
+            box-shadow: 0 10px 15px rgba(0,0,0,0.5);
+        }
+        
+        .tool-header {
+            font-size: 12px; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;
+        }
+
+        .tool-btn {
+            background: #334155;
+            color: white;
+            border: 2px solid transparent;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+        .tool-btn:hover { background: #475569; }
+        .tool-btn.active { border-color: #38bdf8; background: #0f172a; }
+
+        /* Color indicators for tools */
+        .color-box { width: 14px; height: 14px; border-radius: 3px; }
+        .color-player { background: #38bdf8; }
+        .color-enemy { background: #f43f5e; border-radius: 50%; }
+        .color-wall { background: #64748b; }
+        .color-eraser { background: transparent; border: 2px dashed #ef4444; }
+        .color-select { background: transparent; border: 2px solid #eab308; }
+
+        /* Logic Panel */
+        #logic-panel {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(30, 41, 59, 0.95); padding: 20px; border-radius: 12px;
+            border: 2px solid #38bdf8; display: none; pointer-events: auto; z-index: 200;
+            width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+        }
+        #logic-panel h3 { margin-top: 0; color: #38bdf8; border-bottom: 1px solid #475569; padding-bottom: 10px; }
+        
+        .logic-workspace { min-height: 150px; max-height: 250px; overflow-y: auto; background: #0f172a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        .logic-palette { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        
+        .block { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; user-select: none; box-shadow: 0 2px 0 rgba(0,0,0,0.3); }
+        .block:active { transform: translateY(2px); box-shadow: none; }
+        .block-if { background: #f59e0b; color: white; }
+        .block-condition { background: #06b6d4; color: white; border-radius: 16px; }
+        .block-action { background: #8b5cf6; color: white; }
+        .block-win { background: #f59e0b; color: white; }
+        .player-block, .enemy-block, .settings-block { display: none; }
+        
+        .workspace-if { background: #f59e0b; padding: 10px; border-radius: 8px; color: white; font-weight: bold; display: flex; flex-direction: column; gap: 10px; cursor: pointer; position: relative; transition: all 0.2s; }
+        .workspace-if:hover { filter: brightness(0.9); box-shadow: 0 0 0 2px #ef4444; }
+        .workspace-if::after { content: '×'; position: absolute; right: 10px; top: 5px; font-size: 20px; color: rgba(255,255,255,0.5); }
+        .workspace-if:hover::after { color: #ef4444; }
+
+        .workspace-row { display: flex; align-items: center; gap: 10px; }
+        .slot { background: rgba(0,0,0,0.3); min-width: 100px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #cbd5e1; border: 1px dashed rgba(255,255,255,0.5); }
+        .slot-cond { border-radius: 16px; }
+
+        .btn-close { background: #475569; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+        .btn-close:hover { background: #64748b; }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #cbd5e1;
+            pointer-events: none;
+        }
+
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 300;
+        }
+        #start-screen h1 { font-size: 48px; margin-bottom: 10px; color: #38bdf8; text-transform: uppercase; letter-spacing: 4px; }
+        #start-screen p { color: #94a3b8; margin-bottom: 40px; font-size: 18px; }
+        .start-btn {
+            background: #334155; color: white; border: 2px solid #475569;
+            padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 8px;
+            cursor: pointer; margin: 10px; transition: all 0.2s; width: 250px;
+        }
+        .start-btn:hover { background: #475569; border-color: #38bdf8; transform: translateY(-2px); }
+        .start-btn-primary { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+        .start-btn-primary:hover { background: #7dd3fc; border-color: #7dd3fc; }
+
+        #game-over {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; background: rgba(15, 23, 42, 0.95);
+            padding: 40px; border-radius: 16px; border: 2px solid #ef4444;
+            display: none; pointer-events: auto; z-index: 100;
+        }
+        #game-over h2 { color: #ef4444; margin-top: 0; }
+        .btn-restart { background: #38bdf8; color: #0f172a; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 15px;}
+
+        #ai-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center;
+            z-index: 400; pointer-events: auto;
+        }
+        .ai-modal-content {
+            background: #1e293b; padding: 30px; border-radius: 12px; width: 400px;
+            border: 2px solid #c084fc; box-shadow: 0 15px 30px rgba(0,0,0,0.9);
+        }
+        .ai-modal-content h3 { color: #c084fc; margin-top: 0; display: flex; align-items: center; gap: 8px; }
+        .ai-textarea {
+            width: 100%; height: 100px; background: #0f172a; color: white; border: 1px solid #475569;
+            padding: 15px; border-radius: 8px; box-sizing: border-box; resize: none; font-family: inherit; margin-bottom: 15px;
+        }
+        .ai-textarea:focus { outline: none; border-color: #c084fc; }
+        .btn-ai-submit { background: #c084fc; color: #0f172a; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; }
+        .btn-ai-submit:hover { background: #d8b4fe; }
+        .btn-ai-cancel { background: transparent; color: #94a3b8; border: 1px solid #475569; padding: 10px 20px; border-radius: 6px; cursor: pointer; }
+        .btn-ai-cancel:hover { background: #334155; }
+        .ai-loading-spinner {
+            display: none; color: #c084fc; font-size: 14px; margin-bottom: 15px; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen">
+        <h1>Nano Engine</h1>
+        <p>2D Game Maker & Logic Editor</p>
+        <button class="start-btn start-btn-primary" id="btn-new-project">Make New Project</button>
+        <div style="margin-top: 15px; font-size: 16px; color: #94a3b8; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="chk-starter-content" checked style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="chk-starter-content" style="cursor: pointer; user-select: none;">Enable Starter Content</label>
+        </div>
+        <div style="margin-top: 15px; font-size: 13px; color: #64748b;">(Double-click 'Make New Project' to start)</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        
+        <div id="top-bar">
+            <h1>Nano Engine</h1>
+            <div style="display:flex; gap: 10px;">
+                <button id="btn-ai-gen" class="tool-btn" style="border: 1px solid #c084fc; color: #c084fc; background: rgba(192, 132, 252, 0.1);">✨ AI Level</button>
+                <button id="btn-clear" class="tool-btn" style="border: 1px solid #475569;">Clear Level</button>
+                <button id="btn-play" class="btn-play">▶ Play Game</button>
+            </div>
+        </div>
+
+        <div id="toolbar">
+            <div class="tool-header">Spawn Tools</div>
+            <button class="tool-btn" data-tool="Select">
+                <div class="color-box color-select"></div> Select / Logic
+            </button>
+            <button class="tool-btn active" data-tool="Player">
+                <div class="color-box color-player"></div> Player
+            </button>
+            <button class="tool-btn" data-tool="Enemy">
+                <div class="color-box color-enemy"></div> Enemy
+            </button>
+            <button class="tool-btn" data-tool="Wall">
+                <div class="color-box color-wall"></div> Wall (Block)
+            </button>
+            
+            <div class="tool-header" style="margin-top: 10px;">Edit</div>
+            <button class="tool-btn" data-tool="Eraser">
+                <div class="color-box color-eraser"></div> Eraser
+            </button>
+        </div>
+
+        <div id="instructions">
+            Edit Mode: Click canvas to spawn entities. Press 'E' for Settings.
+        </div>
+
+        <div id="logic-panel">
+            <h3>Player Script</h3>
+            <div class="logic-palette">
+                <div class="block block-if" onclick="addLogicBlock('If')">If ___</div>
+                <div class="block block-condition player-block" onclick="addLogicBlock('MouseClicked')">Mouse Clicked</div>
+                <div class="block block-condition player-block" onclick="addLogicBlock('KeyWClicked')">Key W</div>
+                <div class="block block-condition player-block" onclick="addLogicBlock('KeyAClicked')">Key A</div>
+                <div class="block block-condition player-block" onclick="addLogicBlock('KeySClicked')">Key S</div>
+                <div class="block block-condition player-block" onclick="addLogicBlock('KeyDClicked')">Key D</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('Shoot')">Shoot</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('Disappear')">Disappear</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('Appear')">Appear</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('Explode')">Explode</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('MoveUp')">Move Up</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('MoveDown')">Move Down</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('MoveLeft')">Move Left</div>
+                <div class="block block-action player-block" onclick="addLogicBlock('MoveRight')">Move Right</div>
+                <div class="block block-condition enemy-block" onclick="addLogicBlock('DetectsPlayer')">Detects Player</div>
+                <div class="block block-condition enemy-block" onclick="addLogicBlock('TouchesPlayer')">Touches Player</div>
+                <div class="block block-action enemy-block" onclick="addLogicBlock('FollowPlayer')">Follow Player</div>
+                <div class="block block-action enemy-block" onclick="addLogicBlock('Damage')">Damage</div>
+                <div class="block block-condition settings-block" onclick="addLogicBlock('EnemiesZero')">Number Of Enemies = 0</div>
+                <div class="block block-action settings-block" onclick="addLogicBlock('Dead')">Dead</div>
+                <div class="block block-win settings-block" onclick="addLogicBlock('WinRoot')">Win</div>
+            </div>
+            <div class="logic-workspace" id="logic-workspace"></div>
+            <button class="btn-close" onclick="closeLogicPanel()">Done</button>
+        </div>
+
+    </div>
+
+    <div id="game-over">
+        <h2>GAME OVER</h2>
+        <button id="btn-restart" class="btn-restart">Back to Editor</button>
+    </div>
+
+    <div id="ai-modal">
+        <div class="ai-modal-content">
+            <h3>✨ AI Level Designer</h3>
+            <p style="font-size: 14px; color: #94a3b8;">Describe the layout you want. The AI will design it and place the Player, Enemies, and Walls.</p>
+            <textarea id="ai-prompt" class="ai-textarea" placeholder="e.g., A sprawling maze with 5 enemies hiding in the corners..."></textarea>
+            
+            <div id="ai-loading" class="ai-loading-spinner">✨ AI is building your level...</div>
+            <div id="ai-error" style="display:none; color: #ef4444; font-size: 14px; margin-bottom: 15px; text-align: center;"></div>
+            
+            <div style="display:flex; justify-content: flex-end; gap: 10px;">
+                <button id="btn-ai-cancel" class="btn-ai-cancel">Cancel</button>
+                <button id="btn-ai-submit" class="btn-ai-submit">Generate</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+/** ============================================================================
+ * PART 1: CORE ENGINE & ENTITIES
+ * ============================================================================ */
+
+// Platform provided API Key.
+const apiKey = "AIzaSyC2QAC1mfmsLwtJeCfWiQkAM2OJxy8DRBM";
+
+const MathUtils = {
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    rand: (min, max) => Math.random() * (max - min) + min,
+    distance: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1),
+};
+
+class InputManager {
+    constructor(canvas) {
+        this.keys = {};
+        this.mouse = { x: 0, y: 0, isDown: false };
+        window.addEventListener('keydown', (e) => this.keys[e.code] = true);
+        window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            this.mouse.x = e.clientX - rect.left;
+            this.mouse.y = e.clientY - rect.top;
+        });
+        canvas.addEventListener('mousedown', (e) => { if (e.button === 0) this.mouse.isDown = true; });
+        canvas.addEventListener('mouseup', (e) => { if (e.button === 0) this.mouse.isDown = false; });
+    }
+    isKey(code) { return !!this.keys[code]; }
+}
+
+class Entity {
+    constructor(x, y, width, height) {
+        this.x = x; this.y = y;
+        this.width = width; this.height = height;
+        this.vx = 0; this.vy = 0;
+        this.isDead = false;
+        this.tags = [];
+    }
+    hasTag(tag) { return this.tags.includes(tag); }
+    update(dt, engine) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+    }
+    draw(ctx) {}
+    collidesWith(other) {
+        return (this.x - this.width/2 < other.x + other.width/2 &&
+                this.x + this.width/2 > other.x - other.width/2 &&
+                this.y - this.height/2 < other.y + other.height/2 &&
+                this.y + this.height/2 > other.y - other.height/2);
+    }
+}
+
+class Scene {
+    constructor() {
+        this.entities = [];
+        this.engine = null;
+    }
+    add(entity) {
+        this.entities.push(entity);
+        return entity;
+    }
+    update(dt) {
+        this.entities.forEach(e => e.update(dt, this.engine));
+        this.entities = this.entities.filter(e => !e.isDead);
+    }
+    draw(ctx) {
+        this.entities.forEach(e => { ctx.save(); e.draw(ctx); ctx.restore(); });
+    }
+    getEntitiesByTag(tag) { return this.entities.filter(e => e.hasTag(tag)); }
+    spawnExplosion(x, y, color) {
+        for (let i = 0; i < 20; i++) {
+            this.add(new Particle(x, y, color));
+        }
+    }
+}
+
+class Engine {
+    constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.input = new InputManager(this.canvas);
+        this.lastTime = 0;
+        this.activeScene = null;
+        this.isRunning = false;
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+    }
+    resize() {
+        this.width = window.innerWidth; this.height = window.innerHeight;
+        this.canvas.width = this.width; this.canvas.height = this.height;
+    }
+    setScene(scene) {
+        this.activeScene = scene;
+        scene.engine = this;
+    }
+    start() {
+        if (!this.isRunning) {
+            this.isRunning = true;
+            this.lastTime = performance.now();
+            requestAnimationFrame((t) => this.loop(t));
+        }
+    }
+    stop() { this.isRunning = false; }
+    loop(currentTime) {
+        if (!this.isRunning) return;
+        let dt = (currentTime - this.lastTime) / 1000;
+        if (dt > 0.1) dt = 0.1; 
+        this.lastTime = currentTime;
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        if (this.activeScene) {
+            this.activeScene.update(dt);
+            this.activeScene.draw(this.ctx);
+        }
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+/** ============================================================================
+ * PART 2: GAME OBJECTS
+ * ============================================================================ */
+
+class Particle extends Entity {
+    constructor(x, y, color) {
+        super(x, y, 6, 6);
+        this.tags.push('particle');
+        const angle = Math.random() * Math.PI * 2;
+        const speed = MathUtils.rand(50, 250);
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.color = color || '#f59e0b';
+        this.life = 1.0;
+        this.decay = MathUtils.rand(0.5, 1.5);
+    }
+    update(dt, engine) {
+        super.update(dt, engine);
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        this.life -= this.decay * dt;
+        if (this.life <= 0) this.isDead = true;
+    }
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class Wall extends Entity {
+    constructor(x, y) {
+        super(x, y, 40, 40);
+        this.tags.push('wall');
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+    }
+}
+
+class Bullet extends Entity {
+    constructor(x, y, targetX, targetY) {
+        super(x, y, 8, 8);
+        this.tags.push('bullet');
+        const angle = Math.atan2(targetY - y, targetX - x);
+        this.vx = Math.cos(angle) * 600;
+        this.vy = Math.sin(angle) * 600;
+    }
+    update(dt, engine) {
+        super.update(dt, engine);
+        if (this.x < 0 || this.x > engine.width || this.y < 0 || this.y > engine.height) this.isDead = true;
+        const walls = engine.activeScene.getEntitiesByTag('wall');
+        for(let w of walls) {
+            if (this.collidesWith(w)) { this.isDead = true; break; }
+        }
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.width/2, 0, Math.PI*2); ctx.fill();
+    }
+}
+
+class Enemy extends Entity {
+    constructor(x, y, script) {
+        super(x, y, 24, 24);
+        this.tags.push('enemy');
+        this.speed = MathUtils.rand(60, 100);
+        this.script = Array.isArray(script) ? script : []; 
+    }
+    update(dt, engine) {
+        this.vx = 0; this.vy = 0;
+        const players = engine.activeScene.getEntitiesByTag('player').filter(p => p.isVisible && !p.isDead);
+        let closestPlayer = null;
+        let minDist = Infinity;
+        for (let p of players) {
+            let dist = MathUtils.distance(this.x, this.y, p.x, p.y);
+            if (dist < minDist) { minDist = dist; closestPlayer = p; }
+        }
+        for (let rule of this.script) {
+            let conditionMet = false;
+            if (rule.condition === 'DetectsPlayer' && closestPlayer) conditionMet = true;
+            if (rule.condition === 'TouchesPlayer' && closestPlayer && this.collidesWith(closestPlayer)) conditionMet = true;
+            if (conditionMet) {
+                if (rule.action === 'FollowPlayer' && closestPlayer) {
+                    const angle = Math.atan2(closestPlayer.y - this.y, closestPlayer.x - this.x);
+                    this.vx = Math.cos(angle) * this.speed;
+                    this.vy = Math.sin(angle) * this.speed;
+                }
+                if (rule.action === 'Damage' && closestPlayer) {
+                    closestPlayer.isDead = true;
+                    engine.stop(); 
+                    document.getElementById('game-over').style.display = 'block';
+                }
+            }
+        }
+        const prevX = this.x; const prevY = this.y;
+        super.update(dt, engine);
+        const walls = engine.activeScene.getEntitiesByTag('wall');
+        for (let w of walls) {
+            if (this.collidesWith(w)) { this.x = prevX; this.y = prevY; break; }
+        }
+    }
+    draw(ctx) {
+        ctx.fillStyle = '#f43f5e';
+        ctx.beginPath(); ctx.arc(this.x, this.y, 12, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+class Player extends Entity {
+    constructor(x, y, script) {
+        super(x, y, 24, 24);
+        this.tags.push('player');
+        this.speed = 250;
+        this.actionCooldown = 0.5;
+        this.script = Array.isArray(script) ? script : []; 
+        this.isVisible = true;
+        this.discreteStep = 0;
+    }
+    update(dt, engine) {
+        const input = engine.input;
+        this.vx = 0; this.vy = 0;
+        this.actionCooldown -= dt;
+        for (let rule of this.script) {
+            let conditionMet = false;
+            if (rule.condition === 'KeyWClicked' && (input.isKey('KeyW') || input.isKey('ArrowUp'))) conditionMet = true;
+            if (rule.condition === 'KeySClicked' && (input.isKey('KeyS') || input.isKey('ArrowDown'))) conditionMet = true;
+            if (rule.condition === 'KeyAClicked' && (input.isKey('KeyA') || input.isKey('ArrowLeft'))) conditionMet = true;
+            if (rule.condition === 'KeyDClicked' && (input.isKey('KeyD') || input.isKey('ArrowRight'))) conditionMet = true;
+            if (conditionMet) {
+                if (rule.action === 'MoveUp') this.vy += -this.speed;
+                if (rule.action === 'MoveDown') this.vy += this.speed;
+                if (rule.action === 'MoveLeft') this.vx += -this.speed;
+                if (rule.action === 'MoveRight') this.vx += this.speed;
+            }
+        }
+        this.vx = MathUtils.clamp(this.vx, -this.speed, this.speed);
+        this.vy = MathUtils.clamp(this.vy, -this.speed, this.speed);
+        if (this.vx !== 0 && this.vy !== 0) {
+            const len = Math.hypot(this.vx, this.vy);
+            this.vx = (this.vx / len) * this.speed;
+            this.vy = (this.vy / len) * this.speed;
+        }
+        const prevX = this.x; const prevY = this.y;
+        super.update(dt, engine);
+        const walls = engine.activeScene.getEntitiesByTag('wall');
+        for (let w of walls) { if (this.collidesWith(w)) { this.x = prevX; this.y = prevY; } }
+        let discreteRules = this.script.filter(r => ['Shoot', 'Disappear', 'Appear', 'Explode'].includes(r.action));
+        if (discreteRules.length > 0 && this.actionCooldown <= 0) {
+            if (this.discreteStep >= discreteRules.length) this.discreteStep = 0;
+            let currentRule = discreteRules[this.discreteStep];
+            let conditionMet = false;
+            if (currentRule.condition === 'MouseClicked' && input.mouse.isDown) conditionMet = true;
+            if (currentRule.condition === 'KeyWClicked' && input.isKey('KeyW')) conditionMet = true;
+            if (currentRule.condition === 'KeySClicked' && input.isKey('KeyS')) conditionMet = true;
+            if (currentRule.condition === 'KeyAClicked' && input.isKey('KeyA')) conditionMet = true;
+            if (currentRule.condition === 'KeyDClicked' && input.isKey('KeyD')) conditionMet = true;
+            if (conditionMet) {
+                let wantsAction = false;
+                if (currentRule.action === 'Shoot') {
+                    if (this.isVisible) engine.activeScene.add(new Bullet(this.x, this.y, input.mouse.x, input.mouse.y));
+                    wantsAction = true;
+                } else if (currentRule.action === 'Disappear') { this.isVisible = false; wantsAction = true; }
+                else if (currentRule.action === 'Appear') { this.isVisible = true; wantsAction = true; }
+                else if (currentRule.action === 'Explode') {
+                    if (this.isVisible && !this.isDead) {
+                        engine.activeScene.spawnExplosion(this.x, this.y, '#f59e0b');
+                        engine.activeScene.spawnExplosion(this.x, this.y, '#ef4444');
+                        engine.activeScene.spawnExplosion(this.x, this.y, '#fbbf24');
+                        this.isDead = true;
+                        setTimeout(() => {
+                            if (mode === 'play') { 
+                                engine.stop(); 
+                                const goScreen = document.getElementById('game-over');
+                                goScreen.style.display = 'block';
+                                goScreen.querySelector('h2').innerText = 'GAME OVER';
+                            }
+                        }, 1200);
+                    }
+                    wantsAction = true;
+                }
+                if (wantsAction) { this.discreteStep++; this.actionCooldown = 0.3; }
+            }
+        }
+    }
+    draw(ctx) {
+        if (!this.isVisible) return;
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(this.x - 12, this.y - 12, 24, 24);
+    }
+}
+
+class PlayScene extends Scene {
+    constructor(levelScript) {
+        super();
+        this.levelScript = levelScript || [];
+    }
+    update(dt) {
+        super.update(dt);
+        const bullets = this.getEntitiesByTag('bullet');
+        const enemies = this.getEntitiesByTag('enemy');
+        for (let b of bullets) {
+            if (b.isDead) continue;
+            for (let e of enemies) {
+                if (e.isDead) continue;
+                if (b.collidesWith(e)) { b.isDead = true; e.isDead = true; }
+            }
+        }
+        const enemiesCount = enemies.filter(e => !e.isDead).length;
+        let currentConditionMet = true;
+        for (let rule of this.levelScript) {
+            if (rule.type === 'WinRoot') {
+                if (currentConditionMet) {
+                    this.engine.stop(); 
+                    const goScreen = document.getElementById('game-over');
+                    goScreen.style.display = 'block';
+                    goScreen.style.borderColor = '#22c55e';
+                    goScreen.querySelector('h2').innerText = 'YOU WIN!';
+                    goScreen.querySelector('h2').style.color = '#22c55e';
+                }
+            } else {
+                let conditionMet = false;
+                if (rule.condition === 'EnemiesZero' && enemiesCount === 0) conditionMet = true;
+                currentConditionMet = conditionMet;
+                if (conditionMet && rule.action) {
+                    if (rule.action === 'Win') {
+                        this.engine.stop(); 
+                        const goScreen = document.getElementById('game-over');
+                        goScreen.style.display = 'block';
+                        goScreen.style.borderColor = '#22c55e';
+                        goScreen.querySelector('h2').innerText = 'YOU WIN!';
+                        goScreen.querySelector('h2').style.color = '#22c55e';
+                    }
+                    if (rule.action === 'Dead') {
+                        this.engine.stop(); 
+                        const goScreen = document.getElementById('game-over');
+                        goScreen.style.display = 'block';
+                        goScreen.querySelector('h2').innerText = 'GAME OVER';
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** ============================================================================
+ * PART 3: THE EDITOR MANAGER
+ * ============================================================================ */
+
+const gameEngine = new Engine('gameCanvas');
+let mode = 'start';
+let activeTool = 'Player';
+let levelData = [];
+let levelScript = [];
+let selectedEntity = null;
+
+const canvasEl = document.getElementById('gameCanvas');
+const btnPlay = document.getElementById('btn-play');
+const btnClear = document.getElementById('btn-clear');
+const toolBtns = document.querySelectorAll('.tool-btn[data-tool]');
+const logicPanel = document.getElementById('logic-panel');
+const logicWorkspace = document.getElementById('logic-workspace');
+const aiModal = document.getElementById('ai-modal');
+const aiPrompt = document.getElementById('ai-prompt');
+const aiLoading = document.getElementById('ai-loading');
+const aiError = document.getElementById('ai-error');
+
+document.getElementById('btn-new-project').addEventListener('dblclick', () => {
+    if (document.getElementById('chk-starter-content').checked) {
+        let startX = Math.round((gameEngine.width / 2) / 40) * 40;
+        let startY = Math.round((gameEngine.height / 2) / 40) * 40;
+        levelData = [
+            { type: 'Player', x: startX, y: startY, script: [{ condition: 'KeyWClicked', action: 'MoveUp' }, { condition: 'KeyAClicked', action: 'MoveLeft' }, { condition: 'KeySClicked', action: 'MoveDown' }, { condition: 'KeyDClicked', action: 'MoveRight' }, { condition: 'MouseClicked', action: 'Shoot' }] },
+            { type: 'Enemy', x: startX + 160, y: startY, script: [{ condition: 'DetectsPlayer', action: 'FollowPlayer' }, { condition: 'TouchesPlayer', action: 'Damage' }] }
+        ];
+    } else {
+        levelData = []; levelScript = [];
+    }
+    mode = 'edit';
+    document.getElementById('start-screen').style.display = 'none';
+    renderEditor();
+});
+
+document.getElementById('btn-ai-gen').addEventListener('click', () => {
+    aiModal.style.display = 'flex'; aiPrompt.value = ''; aiError.style.display = 'none';
+});
+
+document.getElementById('btn-ai-cancel').addEventListener('click', () => {
+    if (aiLoading.style.display === 'block') return;
+    aiModal.style.display = 'none';
+});
+
+document.getElementById('btn-ai-submit').addEventListener('click', async () => {
+    const prompt = aiPrompt.value.trim();
+    if (!prompt) return;
+
+    const submitBtn = document.getElementById('btn-ai-submit');
+    submitBtn.disabled = true;
+    aiLoading.style.display = 'block';
+    aiError.style.display = 'none';
+    aiPrompt.style.display = 'none';
+
+    try {
+        const newLevel = await generateAILevel(prompt);
+
+        if (!newLevel || newLevel.length === 0) {
+            throw new Error("No valid entities were generated.");
+        }
+
+        levelData = newLevel;
+        levelScript = [];
+        renderEditor();
+        aiModal.style.display = 'none';
+        aiPrompt.style.display = 'block';
+    } catch (err) {
+        console.error(err);
+        aiError.innerText = `AI Generation failed: ${err.message}`;
+        aiError.style.display = 'block';
+        aiPrompt.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        aiLoading.style.display = 'none';
+    }
+});
+
+async function generateAILevel(userPrompt) {
+    const model = "gemini-2.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+    const w = Math.max(800, gameEngine.width || 800);
+    const h = Math.max(600, gameEngine.height || 600);
+
+    const sysPrompt = `
+You are an expert 2D top-down game level designer.
+
+Return ONLY valid JSON.
+Do not wrap the JSON in markdown fences.
+Do not include explanations.
+
+Canvas size: ${w}x${h}
+Grid size: 40
+Allowed entity types: "Player", "Enemy", "Wall"
+
+Rules:
+1. Spawn exactly 1 Player.
+2. Every x and y must be a multiple of 40.
+3. Keep coordinates inside bounds:
+   x >= 40 and x <= ${w - 40}
+   y >= 40 and y <= ${h - 40}
+4. Use walls to create recognizable layouts such as arenas, mazes, chokepoints, rooms, or corridors.
+5. Avoid spawning entities on top of each other.
+6. Return this exact JSON shape:
+
+{
+  "entities": [
+    { "type": "Player", "x": 400, "y": 320 },
+    { "type": "Enemy", "x": 600, "y": 320 },
+    { "type": "Wall", "x": 200, "y": 200 }
+  ]
+}
+`.trim();
+
+    const payload = {
+        systemInstruction: {
+            parts: [{ text: sysPrompt }]
+        },
+        contents: [
+            {
+                role: "user",
+                parts: [{ text: userPrompt }]
+            }
+        ],
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "OBJECT",
+                properties: {
+                    entities: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                type: {
+                                    type: "STRING",
+                                    enum: ["Player", "Enemy", "Wall"]
+                                },
+                                x: { type: "INTEGER" },
+                                y: { type: "INTEGER" }
+                            },
+                            required: ["type", "x", "y"]
+                        }
+                    }
+                },
+                required: ["entities"]
+            }
+        }
+    };
+
+    async function fetchWithRetry(url, options, retries = 4) {
+        const delays = [1000, 2000, 4000, 8000];
+        let lastError = null;
+
+        for (let i = 0; i <= retries; i++) {
+            try {
+                const res = await fetch(url, options);
+                const text = await res.text();
+
+                if (!res.ok) {
+                    lastError = new Error(`HTTP ${res.status}: ${text}`);
+                } else {
+                    return JSON.parse(text);
+                }
+            } catch (err) {
+                lastError = err;
+            }
+
+            if (i < retries) {
+                await new Promise(resolve => setTimeout(resolve, delays[i] || 8000));
+            }
+        }
+
+        throw lastError || new Error("Request failed.");
+    }
+
+    const data = await fetchWithRetry(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const partText =
+        data?.candidates?.[0]?.content?.parts?.find(p => typeof p.text === "string")?.text;
+
+    if (!partText) {
+        throw new Error("No text returned from Gemini.");
+    }
+
+    const cleanJson = partText
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+
+    let raw;
+    try {
+        raw = JSON.parse(cleanJson);
+    } catch {
+        throw new Error("Gemini returned invalid JSON.");
+    }
+
+    if (!raw.entities || !Array.isArray(raw.entities)) {
+        throw new Error("Gemini response missing entities array.");
+    }
+
+    return raw.entities
+        .filter(item =>
+            item &&
+            ["Player", "Enemy", "Wall"].includes(item.type) &&
+            Number.isFinite(item.x) &&
+            Number.isFinite(item.y)
+        )
+        .map(item => {
+            const snappedX = Math.max(40, Math.min(w - 40, Math.round(item.x / 40) * 40));
+            const snappedY = Math.max(40, Math.min(h - 40, Math.round(item.y / 40) * 40));
+
+            let script = [];
+            if (item.type === "Player") {
+                script = [
+                    { condition: "KeyWClicked", action: "MoveUp" },
+                    { condition: "KeyAClicked", action: "MoveLeft" },
+                    { condition: "KeySClicked", action: "MoveDown" },
+                    { condition: "KeyDClicked", action: "MoveRight" },
+                    { condition: "MouseClicked", action: "Shoot" }
+                ];
+            } else if (item.type === "Enemy") {
+                script = [
+                    { condition: "DetectsPlayer", action: "FollowPlayer" },
+                    { condition: "TouchesPlayer", action: "Damage" }
+                ];
+            }
+
+            return {
+                type: item.type,
+                x: snappedX,
+                y: snappedY,
+                script
+            };
+        });
+}
+
+function renderEditor() {
+    if (mode !== 'edit') return;
+    const ctx = gameEngine.ctx;
+    ctx.clearRect(0, 0, gameEngine.width, gameEngine.height);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    for(let i=0; i<gameEngine.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,gameEngine.height); ctx.stroke(); }
+    for(let i=0; i<gameEngine.height; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(gameEngine.width,i); ctx.stroke(); }
+    levelData.forEach(item => {
+        ctx.save();
+        if (item.type === 'Player') { ctx.fillStyle = '#38bdf8'; ctx.fillRect(item.x - 12, item.y - 12, 24, 24); }
+        else if (item.type === 'Enemy') { ctx.fillStyle = '#f43f5e'; ctx.beginPath(); ctx.arc(item.x, item.y, 12, 0, Math.PI*2); ctx.fill(); }
+        else if (item.type === 'Wall') { ctx.fillStyle = '#64748b'; ctx.fillRect(item.x - 20, item.y - 20, 40, 40); }
+        if (item === selectedEntity && activeTool === 'Select') { ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.strokeRect(item.x - 16, item.y - 16, 32, 32); }
+        ctx.restore();
+    });
+}
+
+window.addEventListener('resize', renderEditor);
+canvasEl.addEventListener('mousedown', (e) => {
+    if (mode !== 'edit') return;
+    const rect = canvasEl.getBoundingClientRect();
+    const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+    if (activeTool === 'Select') {
+        selectedEntity = levelData.find(item => (item.type !== 'Wall') && Math.hypot(item.x - x, item.y - y) < 20) || null;
+        if (selectedEntity) openLogicPanel(selectedEntity);
+    } else if (activeTool === 'Eraser') {
+        levelData = levelData.filter(item => Math.hypot(item.x - x, item.y - y) > 20);
+    } else {
+        let sx = activeTool === 'Wall' ? Math.round(x/40)*40 : x;
+        let sy = activeTool === 'Wall' ? Math.round(y/40)*40 : y;
+        levelData.push({ type: activeTool, x: sx, y: sy, script: activeTool === 'Enemy' ? [{ condition: 'DetectsPlayer', action: 'FollowPlayer' }, { condition: 'TouchesPlayer', action: 'Damage' }] : [] });
+    }
+    renderEditor();
+});
+
+function openLogicPanel(item) {
+    selectedEntity = item;
+    const title = document.querySelector('#logic-panel h3');
+    document.querySelectorAll('.player-block, .enemy-block, .settings-block').forEach(el => el.style.display = 'none');
+    if (item === 'Settings') {
+        title.innerText = 'Level Settings';
+        document.querySelectorAll('.settings-block').forEach(el => el.style.display = 'block');
+    } else {
+        title.innerText = item.type + ' Script';
+        document.querySelectorAll('.' + item.type.toLowerCase() + '-block').forEach(el => el.style.display = 'block');
+    }
+    logicPanel.style.display = 'block';
+    updateLogicWorkspace();
+}
+
+function closeLogicPanel() { logicPanel.style.display = 'none'; selectedEntity = null; renderEditor(); }
+
+function addLogicBlock(type) {
+    if (!selectedEntity) return;
+    const script = selectedEntity === 'Settings' ? levelScript : selectedEntity.script;
+    if (type === 'If') script.push({ condition: null, action: null });
+    else if (type === 'WinRoot') script.push({ type: 'WinRoot' });
+    else {
+        let last = [...script].reverse().find(r => r.type !== 'WinRoot');
+        if (!last) return;
+        const conds = ['MouseClicked', 'KeyWClicked', 'KeyAClicked', 'KeySClicked', 'KeyDClicked', 'DetectsPlayer', 'TouchesPlayer', 'EnemiesZero'];
+        const acts = ['Shoot', 'Disappear', 'Appear', 'Explode', 'MoveUp', 'MoveDown', 'MoveLeft', 'MoveRight', 'FollowPlayer', 'Damage', 'Dead', 'Win'];
+        if (conds.includes(type)) last.condition = type;
+        if (acts.includes(type)) last.action = type;
+    }
+    updateLogicWorkspace();
+}
+
+function removeLogicBlock(idx) {
+    const s = selectedEntity === 'Settings' ? levelScript : selectedEntity.script;
+    s.splice(idx, 1); updateLogicWorkspace();
+}
+
+function updateLogicWorkspace() {
+    const script = selectedEntity === 'Settings' ? levelScript : (selectedEntity ? selectedEntity.script : []);
+    if (script.length === 0) { logicWorkspace.innerHTML = 'Add blocks...'; return; }
+    const labels = { 'MouseClicked': 'Mouse Clicked', 'KeyWClicked': 'Key W', 'KeyAClicked': 'Key A', 'KeySClicked': 'Key S', 'KeyDClicked': 'Key D', 'DetectsPlayer': 'Detects Player', 'TouchesPlayer': 'Touches Player', 'EnemiesZero': 'Enemies = 0', 'Shoot': 'Shoot', 'Disappear': 'Disappear', 'Appear': 'Appear', 'Explode': 'Explode', 'MoveUp': 'Up', 'MoveDown': 'Down', 'MoveLeft': 'Left', 'MoveRight': 'Right', 'FollowPlayer': 'Follow', 'Damage': 'Damage', 'Dead': 'Dead', 'Win': 'Win' };
+    logicWorkspace.innerHTML = script.map((r, i) => r.type === 'WinRoot' ? `<div class="workspace-if" onclick="removeLogicBlock(${i})">WIN</div>` : `<div class="workspace-if" onclick="removeLogicBlock(${i})">If ${r.condition?labels[r.condition]:'___'} then ${r.action?labels[r.action]:'___'}</div>`).join('');
+}
+
+toolBtns.forEach(btn => btn.addEventListener('click', (e) => {
+    toolBtns.forEach(b => b.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+    activeTool = e.currentTarget.dataset.tool;
+}));
+
+btnClear.addEventListener('click', () => { levelData = []; levelScript = []; renderEditor(); });
+
+window.addEventListener('keydown', (e) => {
+    if (mode === 'edit' && e.code === 'KeyE' && document.activeElement.tagName !== 'TEXTAREA') openLogicPanel('Settings');
+});
+
+btnPlay.addEventListener('click', () => {
+    if (mode === 'edit') {
+        mode = 'play'; btnPlay.innerText = '⏹ Stop';
+        document.getElementById('toolbar').style.display = 'none';
+        const scene = new PlayScene(levelScript);
+        levelData.forEach(item => {
+            if (item.type === 'Player') scene.add(new Player(item.x, item.y, item.script));
+            else if (item.type === 'Enemy') scene.add(new Enemy(item.x, item.y, item.script));
+            else if (item.type === 'Wall') scene.add(new Wall(item.x, item.y));
+        });
+        gameEngine.setScene(scene); gameEngine.start();
+    } else {
+        mode = 'edit'; btnPlay.innerText = '▶ Play';
+        document.getElementById('toolbar').style.display = 'flex';
+        document.getElementById('game-over').style.display = 'none';
+        gameEngine.stop(); renderEditor();
+    }
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => btnPlay.click());
+renderEditor();
+</script>
+</body>
+</html>
